@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>简历解析与岗位匹配</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+  .container{max-width:900px;margin:0 auto;padding:20px}
+
+  .card{background:#fff;border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+  h2{font-size:18px;margin-bottom:16px;color:#1a1a1a;border-bottom:2px solid #2563eb;padding-bottom:8px}
+  h3{font-size:15px;color:#333;margin-bottom:8px}
+
+  .upload-zone{border:2px dashed #d1d5db;border-radius:8px;padding:40px;text-align:center;cursor:pointer;transition:all .2s}
+  .upload-zone:hover,.upload-zone.dragover{border-color:#2563eb;background:#eff6ff}
+  .upload-zone .icon{font-size:40px;margin-bottom:8px}
+  .upload-zone p{color:#6b7280;font-size:14px}
+
+  .file-info{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 12px;background:#ecfdf5;border-radius:6px;font-size:14px;color:#065f46}
+  .file-info.show{display:flex}
+
+  .btn{padding:12px 24px;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:500;transition:all .2s}
+  .btn-primary{background:#2563eb;color:#fff;width:100%}
+  .btn-primary:hover{background:#1d4ed8}
+  .btn-primary:disabled{background:#93c5fd;cursor:not-allowed}
+  .btn-secondary{background:#fff;color:#2563eb;border:1px solid #2563eb;margin-top:8px;width:100%}
+
+  textarea{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:12px;font-size:14px;resize:vertical;min-height:120px;font-family:inherit}
+  textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+
+  .field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .field-item{background:#f9fafb;padding:10px 12px;border-radius:6px}
+  .field-item .label{font-size:12px;color:#6b7280;margin-bottom:4px}
+  .field-item .value{font-size:14px;color:#111;word-break:break-all}
+  .field-item .value:empty::after{content:"未识别";color:#d1d5db}
+
+  .projects-list{list-style:none}
+  .projects-list li{padding:8px 12px;margin:4px 0;background:#f9fafb;border-radius:6px;font-size:14px;border-left:3px solid #2563eb}
+
+  .score-display{text-align:center;padding:20px}
+  .score-ring{display:inline-block;width:100px;height:100px;border-radius:50%;border:8px solid #2563eb;line-height:84px;font-size:32px;font-weight:700;color:#2563eb;margin-bottom:8px}
+  .score-ring.low{border-color:#ef4444;color:#ef4444}
+  .score-ring.mid{border-color:#f59e0b;color:#f59e0b}
+  .score-ring.high{border-color:#22c55e;color:#22c55e}
+
+  .match-detail{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .match-stat{text-align:center}
+  .match-stat .num{font-size:24px;font-weight:700;color:#2563eb}
+  .match-stat .lbl{font-size:12px;color:#6b7280}
+
+  .keyword-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .tag{padding:4px 10px;border-radius:20px;font-size:12px;background:#dbeafe;color:#1e40af}
+  .tag.matched{background:#d1fae5;color:#065f46}
+
+  .section-divider{border:none;border-top:1px solid #e5e7eb;margin:20px 0}
+
+  .raw-text{max-height:200px;overflow-y:auto;font-size:13px;color:#4b5563;white-space:pre-wrap;line-height:1.5;display:none;background:#f9fafb;padding:12px;border-radius:8px}
+  .raw-text.show{display:block}
+
+  .toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;z-index:1000;animation:slideIn .3s ease}
+  .toast.error{background:#ef4444}
+  .toast.success{background:#22c55e}
+  @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+  .empty-state{text-align:center;color:#9ca3af;padding:30px;font-size:14px}
+
+  @media(max-width:600px){
+    .container{padding:10px}
+    .card{padding:16px}
+    .field-grid{grid-template-columns:1fr 1fr}
+    .match-detail{gap:12px}
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1 style="text-align:center;font-size:22px;padding:20px 0 0;color:#1a1a1a">简历解析与岗位匹配</h1>
+  <p style="text-align:center;color:#6b7280;font-size:14px;margin-bottom:20px">上传PDF简历 → 智能提取信息 → 岗位匹配评分</p>
+
+  <!-- 模块一：上传 -->
+  <div class="card">
+    <h2>📄 上传简历</h2>
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon">📁</div>
+      <p>点击选择 PDF 简历文件</p>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf" style="display:none">
+    <div class="file-info" id="fileInfo">
+      <span>✅</span><span id="fileName"></span>
+    </div>
+    <button class="btn btn-primary" id="uploadBtn" disabled>上传并解析</button>
+    <div class="raw-text" id="rawText"></div>
+  </div>
+
+  <!-- 模块二：关键信息 -->
+  <div class="card" id="infoCard" style="display:none">
+    <h2>📋 关键信息提取</h2>
+    <div class="field-grid" id="basicInfo"></div>
+    <hr class="section-divider">
+    <h3>📂 项目经历</h3>
+    <ul class="projects-list" id="projectsList"></ul>
+  </div>
+
+  <!-- 模块三：岗位匹配 -->
+  <div class="card">
+    <h2>🎯 岗位匹配评分</h2>
+    <textarea id="jdInput" placeholder="请输入岗位描述（JD），例如：&#10;&#10;岗位职责：&#10;1. 负责后端服务开发与维护&#10;2. 使用Python/Java进行系统设计&#10;&#10;任职要求：&#10;1. 3年以上开发经验&#10;2. 熟悉微服务架构..."></textarea>
+    <button class="btn btn-primary" id="matchBtn" disabled>开始匹配</button>
+    <div id="matchResult" class="empty-state">请先上传简历并输入岗位描述</div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'http://127.0.0.1:9000';
+
+let resumeText = '';
+
+// DOM
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const uploadBtn = document.getElementById('uploadBtn');
+const rawText = document.getElementById('rawText');
+const infoCard = document.getElementById('infoCard');
+const basicInfo = document.getElementById('basicInfo');
+const projectsList = document.getElementById('projectsList');
+const jdInput = document.getElementById('jdInput');
+const matchBtn = document.getElementById('matchBtn');
+const matchResult = document.getElementById('matchResult');
+
+// Toast
+function toast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// 文件选择
+uploadZone.onclick = () => fileInput.click();
+uploadZone.ondragover = (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); };
+uploadZone.ondragleave = () => uploadZone.classList.remove('dragover');
+uploadZone.ondrop = (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    onFileSelected();
+  }
+};
+
+fileInput.onchange = onFileSelected;
+
+function onFileSelected() {
+  const file = fileInput.files[0];
+  if (file && file.name.endsWith('.pdf')) {
+    fileName.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    fileInfo.classList.add('show');
+    uploadBtn.disabled = false;
+  } else {
+    fileInfo.classList.remove('show');
+    uploadBtn.disabled = true;
+    toast('请选择PDF文件', 'error');
+  }
+}
+
+// 模块一 + 模块二：上传并解析，然后自动提取信息
+uploadBtn.onclick = async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = '解析中...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    // 步骤1：上传PDF
+    const res1 = await fetch(API_BASE + '/api/upload-resume', { method: 'POST', body: formData });
+    const data1 = await res1.json();
+
+    if (data1.code !== 200) {
+      toast(data1.msg || '解析失败', 'error');
+      resetUploadBtn();
+      return;
+    }
+
+    resumeText = data1.data.text;
+    rawText.textContent = resumeText;
+    rawText.classList.add('show');
+    toast('PDF解析成功 (' + data1.data.length + ' 字符)', 'success');
+
+    // 步骤2：提取关键信息
+    const res2 = await fetch(API_BASE + '/api/extract-info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: resumeText })
+    });
+    const data2 = await res2.json();
+
+    if (data2.code === 200) {
+      renderInfo(data2.data);
+      infoCard.style.display = 'block';
+      matchBtn.disabled = false;
+    }
+  } catch (err) {
+    toast('请求异常，请确认服务已启动', 'error');
+    console.error(err);
+  } finally {
+    resetUploadBtn();
+  }
+};
+
+function resetUploadBtn() {
+  uploadBtn.disabled = false;
+  uploadBtn.textContent = '上传并解析';
+}
+
+function renderInfo(data) {
+  // 基本信息
+  const labels = { name: '姓名', phone: '电话', email: '邮箱', address: '地址',
+                   education: '学历', work_years: '工作年限', job_intention: '求职意向', expected_salary: '期望薪资' };
+  let html = '';
+  for (const [key, label] of Object.entries(labels)) {
+    html += '<div class="field-item"><div class="label">' + label + '</div><div class="value">' + (data[key] || '') + '</div></div>';
+  }
+  basicInfo.innerHTML = html;
+
+  // 项目经历
+  if (data.projects && data.projects.length) {
+    projectsList.innerHTML = data.projects.map(p => '<li>' + escapeHtml(p) + '</li>').join('');
+  } else {
+    projectsList.innerHTML = '<li class="empty-state">未识别到项目经历</li>';
+  }
+}
+
+// 模块三：岗位匹配
+matchBtn.onclick = async () => {
+  const jd = jdInput.value.trim();
+  if (!jd) { toast('请输入岗位描述', 'error'); return; }
+  if (!resumeText) { toast('请先上传简历', 'error'); return; }
+
+  matchBtn.disabled = true;
+  matchBtn.textContent = '匹配中...';
+
+  try {
+    const res = await fetch(API_BASE + '/api/match-jd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume_text: resumeText, jd: jd })
+    });
+    const data = await res.json();
+
+    if (data.code === 200) {
+      renderMatch(data.data);
+    } else {
+      toast(data.msg || '匹配失败', 'error');
+    }
+  } catch (err) {
+    toast('匹配请求异常', 'error');
+    console.error(err);
+  } finally {
+    matchBtn.disabled = false;
+    matchBtn.textContent = '开始匹配';
+  }
+};
+
+function renderMatch(data) {
+  const m = data.match_result;
+  const score = m.match_score;
+  let cssClass = score < 40 ? 'low' : (score < 70 ? 'mid' : 'high');
+
+  let keywordsHtml = '<div class="keyword-tags"><span style="font-size:12px;color:#6b7280;margin-right:4px">匹配关键词：</span>';
+  m.matched_keywords.forEach(k => { keywordsHtml += '<span class="tag matched">' + escapeHtml(k) + '</span>'; });
+  m.jd_keywords.forEach(k => {
+    if (!m.matched_keywords.includes(k)) keywordsHtml += '<span class="tag">' + escapeHtml(k) + '</span>';
+  });
+  keywordsHtml += '</div>';
+
+  matchResult.innerHTML = `
+    <div class="score-display">
+      <div class="score-ring ${cssClass}">${score}</div>
+      <div style="color:#6b7280;font-size:13px">综合匹配度</div>
+    </div>
+    <div class="match-detail">
+      <div class="match-stat"><div class="num">${(m.skill_match_rate * 100).toFixed(0)}%</div><div class="lbl">技能匹配率</div></div>
+      <div class="match-stat"><div class="num">${(m.similarity * 100).toFixed(0)}%</div><div class="lbl">文本相似度</div></div>
+    </div>
+    ${keywordsHtml}
+  `;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// 初始更新匹配按钮状态
+jdInput.oninput = () => {
+  matchBtn.disabled = !resumeText || !jdInput.value.trim();
+};
+</script>
+
+</body>
+</html>
